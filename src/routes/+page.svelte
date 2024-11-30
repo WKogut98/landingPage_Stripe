@@ -1,8 +1,8 @@
 <script>
-    //import HeroSection from "$lib/components/HeroSection.svelte";
-    import { HeroSection, ChapterPreview, AuthorSection } from "$components";
+    import { HeroSection, ChapterPreview, AuthorSection, FAQSection } from "$components";
 </script>
 
 <HeroSection />
 <ChapterPreview />
 <AuthorSection />
+<FAQSection />
