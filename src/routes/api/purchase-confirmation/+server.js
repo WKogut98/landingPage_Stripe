@@ -1,21 +1,36 @@
-import { json } from '@sveltejs/kit';
+import { json } from "@sveltejs/kit";
 import sgMail from "@sendgrid/mail";
-import { SENDGRID_API_KEY } from '$env/static/private';
+import {
+  SENDGRID_API_KEY,
+  STRIPE_WEBHOOK_SECRET,
+  STRIPE_API_KEY,
+} from "$env/static/private";
+import Stripe from "stripe";
+
+const stripe = new Stripe(STRIPE_API_KEY, { apiVersion: "2022-11-15" });
 
 sgMail.setApiKey(SENDGRID_API_KEY);
 
-const PDF_GUIDE_URL = "https://narrify-public.s3.eu-central-1.amazonaws.com/sample.pdf";
+const PDF_GUIDE_URL =
+  "https://narrify-public.s3.eu-central-1.amazonaws.com/sample.pdf";
 
-export async function POST({request})
-{
-    const requestBody = await request.json();
+export async function POST({ request }) {
+  const body = await request.text(); // Get the raw body
+  const signature = request.headers.get("stripe-signature") || "";
+
+  try {
+    const stripeEvent = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      STRIPE_WEBHOOK_SECRET
+    );
+
+    const customerEmail = stripeEvent.data.object.customer_details.email;
+    const customerName = stripeEvent.customer_details.name;
 
     const response = await fetch(PDF_GUIDE_URL);
     const pdfBuffer = await response.arrayBuffer();
-    const base64pdf = Buffer.from(pdfBuffer).toString("base64");
-
-    const customerEmail = requestBody.data.object.customer_details.email;
-    const customerName = requestBody.data.object.customer_details.name;
+    const base64Pdf = Buffer.from(pdfBuffer).toString("base64");
 
     const message ={
         to: customerEmail,
@@ -36,5 +51,12 @@ export async function POST({request})
         }]
     };
     await sgMail.send(message);
-    return json({response: "Email sent"});
+    return json({ response: "Email sent" });
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err);
+    return json(
+      { error: "Webhook signature verification failed" },
+      { status: 400 }
+    );
+  }
 }
